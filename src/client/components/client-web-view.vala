@@ -275,6 +275,7 @@ public class ClientWebView : WebKit.WebView, Geary.BaseInterface {
         setts.enable_page_cache = false;
         setts.enable_plugins = false;
         setts.javascript_can_access_clipboard = true;
+        setts.minimum_font_size = 21;
 
         WebKit.UserContentManager content_manager =
              custom_manager ?? new WebKit.UserContentManager();
