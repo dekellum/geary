@@ -46,7 +46,10 @@ src/client/composer/contact-entry-completion.vala
 src/client/composer/contact-list-store.vala
 src/client/composer/email-entry.vala
 src/client/composer/spell-check-popover.vala
+src/client/conversation-list/conversation-list.vala
 src/client/conversation-list/conversation-list-cell-renderer.vala
+src/client/conversation-list/conversation-list-item.vala
+src/client/conversation-list/conversation-list-model.vala
 src/client/conversation-list/conversation-list-store.vala
 src/client/conversation-list/conversation-list-view.vala
 src/client/conversation-list/formatted-conversation-data.vala
@@ -396,6 +399,7 @@ src/mailer/main.vala
 [type: gettext/glade]ui/conversation-email.ui
 [type: gettext/glade]ui/conversation-email-attachment-view.ui
 [type: gettext/glade]ui/conversation-email-menus.ui
+[type: gettext/glade]ui/conversation-list-item.ui
 [type: gettext/glade]ui/conversation-message-menus.ui
 [type: gettext/glade]ui/conversation-message.ui
 [type: gettext/glade]ui/conversation-viewer.ui
