@@ -109,7 +109,6 @@ public class GearyController : Geary.BaseObject {
     private Cancellable cancellable_context_dependent_buttons = new Cancellable();
     private Gee.HashMap<Geary.Account, Cancellable> inbox_cancellables
         = new Gee.HashMap<Geary.Account, Cancellable>();
-    private Gee.Set<Geary.App.Conversation> selected_conversations = new Gee.HashSet<Geary.App.Conversation>();
     private Geary.App.Conversation? last_deleted_conversation = null;
     private Gee.LinkedList<ComposerWidget> composer_widgets = new Gee.LinkedList<ComposerWidget>();
     private NewMessagesMonitor? new_messages_monitor = null;
@@ -232,8 +231,6 @@ public class GearyController : Geary.BaseObject {
         Geary.Engine.instance.untrusted_host.connect(on_untrusted_host);
         
         // Connect to various UI signals.
-        main_window.conversation_list_view.conversations_selected.connect(on_conversations_selected);
-        main_window.conversation_list_view.conversation_activated.connect(on_conversation_activated);
         main_window.conversation_list_view.load_more.connect(on_load_more);
         main_window.conversation_list_view.mark_conversations.connect(on_mark_conversations);
         main_window.conversation_list_view.visible_conversations_changed.connect(on_visible_conversations_changed);
@@ -306,8 +303,6 @@ public class GearyController : Geary.BaseObject {
         Geary.Engine.instance.untrusted_host.disconnect(on_untrusted_host);
 
         // Disconnect from various UI signals.
-        main_window.conversation_list_view.conversations_selected.disconnect(on_conversations_selected);
-        main_window.conversation_list_view.conversation_activated.disconnect(on_conversation_activated);
         main_window.conversation_list_view.load_more.disconnect(on_load_more);
         main_window.conversation_list_view.mark_conversations.disconnect(on_mark_conversations);
         main_window.conversation_list_view.visible_conversations_changed.disconnect(on_visible_conversations_changed);
@@ -1552,63 +1547,6 @@ public class GearyController : Geary.BaseObject {
         }
     }
 
-    private void on_conversations_selected(Gee.Set<Geary.App.Conversation> selected) {
-        this.selected_conversations = selected;
-        this.application.get_action(
-            ACTION_FIND_IN_CONVERSATION
-            ).set_sensitive(false);
-        ConversationViewer viewer = this.main_window.conversation_viewer;
-        if (this.current_folder != null && !viewer.is_composer_visible) {
-            switch(selected.size) {
-            case 0:
-                enable_message_buttons(false);
-                viewer.show_none_selected();
-                break;
-
-            case 1:
-                // Cancel existing avatar loads before loading new
-                // convo since that will start loading more avatars
-                viewer.load_conversation.begin(
-                    Geary.Collection.get_first(selected),
-                    this.current_folder,
-                    (obj, ret) => {
-                        try {
-                            viewer.load_conversation.end(ret);
-                            enable_message_buttons(true);
-                            this.application.get_action(
-                                ACTION_FIND_IN_CONVERSATION
-                            ).set_sensitive(true);
-                        } catch (Error err) {
-                            debug("Unable to load conversation: %s",
-                                  err.message);
-                        }
-                    }
-                );
-                break;
-
-            default:
-                enable_multiple_message_buttons();
-                viewer.show_multiple_selected();
-                break;
-            }
-        }
-    }
-
-    private void on_conversation_activated(Geary.App.Conversation activated) {
-        // Currently activating a conversation is only available for drafts folders.
-        if (current_folder == null || current_folder.special_folder_type !=
-            Geary.SpecialFolderType.DRAFTS)
-            return;
-
-        // TODO: Determine how to map between conversations and drafts correctly.
-        Geary.Email draft = activated.get_latest_recv_email(
-            Geary.App.Conversation.Location.IN_FOLDER
-        );
-        create_compose_widget(
-            ComposerWidget.ComposeType.NEW_MESSAGE, draft, null, null, true
-        );
-    }
-
     private void on_special_folder_type_changed(Geary.Folder folder, Geary.SpecialFolderType old_type,
         Geary.SpecialFolderType new_type) {
         main_window.folder_list.remove_folder(folder);
@@ -1794,7 +1732,7 @@ public class GearyController : Geary.BaseObject {
     
     private Gee.ArrayList<Geary.EmailIdentifier> get_selected_email_ids(bool latest_sent_only) {
         Gee.ArrayList<Geary.EmailIdentifier> ids = new Gee.ArrayList<Geary.EmailIdentifier>();
-        foreach (Geary.App.Conversation conversation in selected_conversations)
+        foreach (Geary.App.Conversation conversation in this.main_window.get_selected_conversations())
             get_conversation_email_ids(conversation, latest_sent_only, ids);
         return ids;
     }
@@ -1812,7 +1750,7 @@ public class GearyController : Geary.BaseObject {
         bool read_selected = false;
         bool starred_selected = false;
         bool unstarred_selected = false;
-        foreach (Geary.App.Conversation conversation in selected_conversations) {
+        foreach (Geary.App.Conversation conversation in this.main_window.get_selected_conversations()) {
             if (conversation.is_unread())
                 unread_selected = true;
             
@@ -1984,9 +1922,6 @@ public class GearyController : Geary.BaseObject {
     
     private void on_move_conversation(Geary.Folder destination) {
         // Nothing to do if nothing selected.
-        if (selected_conversations == null || selected_conversations.size == 0)
-            return;
-        
         Gee.List<Geary.EmailIdentifier> ids = get_selected_email_ids(false);
         if (ids.size == 0)
             return;
@@ -2241,12 +2176,6 @@ public class GearyController : Geary.BaseObject {
         }
     }
 
-    private void create_compose_widget(ComposerWidget.ComposeType compose_type,
-        Geary.Email? referred = null, string? quote = null, string? mailto = null,
-        bool is_draft = false) {
-        create_compose_widget_async.begin(compose_type, referred, quote, mailto, is_draft);
-    }
-
     /**
      * Creates a composer widget. Depending on the arguments, this can be inline in the
      * conversation or as a new window.
@@ -2256,12 +2185,18 @@ public class GearyController : Geary.BaseObject {
      * @param mailto - A "mailto:"-link
      * @param is_draft - Whether we're starting from a draft (true) or a new mail (false)
      */
+    internal void create_compose_widget(ComposerWidget.ComposeType compose_type,
+        Geary.Email? referred = null, string? quote = null, string? mailto = null,
+        bool is_draft = false) {
+        create_compose_widget_async.begin(compose_type, referred, quote, mailto, is_draft);
+    }
+
     private async void create_compose_widget_async(ComposerWidget.ComposeType compose_type,
         Geary.Email? referred = null, string? quote = null, string? mailto = null,
         bool is_draft = false) {
         if (current_account == null)
             return;
-        
+
         bool inline;
         if (!should_create_new_composer(compose_type, referred, quote, is_draft, out inline))
             return;
@@ -2553,6 +2488,10 @@ public class GearyController : Geary.BaseObject {
             debug("Not archiving/trashing/deleting; viewed conversation is last deleted conversation");
             return;
         }
+
+        Gee.Set<Geary.App.Conversation> selected_conversations = this.main_window.get_selected_conversations();
+        if (selected_conversations.size == 0)
+            return;
 
         last_deleted_conversation = selected_conversations.size > 0
             ? Geary.traverse<Geary.App.Conversation>(selected_conversations).first() : null;
@@ -2854,7 +2793,7 @@ public class GearyController : Geary.BaseObject {
 
     // Updates tooltip text depending on number of conversations selected.
     private void update_tooltips() {
-        bool single = selected_conversations.size == 1;
+        bool single = this.main_window.get_selected_conversations().size == 1;
 
         this.application.actions.get_action(ACTION_MARK_AS_MENU).tooltip = single ?
             MARK_MESSAGE_MENU_TOOLTIP_SINGLE : MARK_MESSAGE_MENU_TOOLTIP_MULTIPLE;
@@ -2921,13 +2860,6 @@ public class GearyController : Geary.BaseObject {
         search_text_changed(main_window.search_bar.search_text);
     }
 
-    /**
-     * Returns a read-only set of currently selected conversations.
-     */
-    public Gee.Set<Geary.App.Conversation> get_selected_conversations() {
-        return selected_conversations.read_only_view;
-    }
-    
     // Find the first inbox we know about and switch to it.
     private void switch_to_first_inbox() {
         try {
