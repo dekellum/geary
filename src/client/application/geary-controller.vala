@@ -51,9 +51,9 @@ public class GearyController : Geary.BaseObject {
     public const string ACTION_TOGGLE_FIND = "GearyToggleFind";
 
     public const string PROP_CURRENT_CONVERSATION ="current-conversations";
-    
-    public const int MIN_CONVERSATION_COUNT = 50;
-    
+
+    internal const int CONVERSATION_PAGE_SIZE = 50;
+
     private const string DELETE_CONVERSATION_LABEL = _("Delete conversation");
     private const string DELETE_CONVERSATION_TOOLTIP_SINGLE = _("Delete conversation (Shift+Delete)");
     private const string DELETE_CONVERSATION_TOOLTIP_MULTIPLE = _("Delete conversations (Shift+Delete)");
@@ -1436,10 +1436,14 @@ public class GearyController : Geary.BaseObject {
         }
         
         update_ui();
-        
-        current_conversations = new Geary.App.ConversationMonitor(current_folder, Geary.Folder.OpenFlags.NO_DELAY,
-            ConversationListStore.REQUIRED_FIELDS, MIN_CONVERSATION_COUNT);
-        
+
+        current_conversations = new Geary.App.ConversationMonitor(
+            current_folder,
+            Geary.Folder.OpenFlags.NO_DELAY,
+            ConversationListStore.REQUIRED_FIELDS,
+            CONVERSATION_PAGE_SIZE * 2 // load double up front when not scrolling
+        );
+
         if (inboxes.values.contains(current_folder)) {
             // Inbox selected, clear new messages if visible
             clear_new_messages("do_select_folder (inbox)", null);
