@@ -65,6 +65,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         this.conversation_list = new ConversationList(application.config);
         this.conversation_list.conversation_selection_changed.connect(on_conversation_selection_changed);
         this.conversation_list.conversation_activated.connect(on_conversation_activated);
+        this.conversation_list.visible_conversations_changed.connect(on_visible_conversations_changed);
 
         this.conversation_list.load_more.connect(on_load_more);
         load_config(application.config);
@@ -535,6 +536,10 @@ public class MainWindow : Gtk.ApplicationWindow {
                 }
             }
         }
+    }
+
+    void on_visible_conversations_changed(Gee.Set<Geary.App.Conversation> visible) {
+        this.application.controller.clear_new_messages("on_visible_conversations_changed", visible);
     }
 
     [GtkCallback]
